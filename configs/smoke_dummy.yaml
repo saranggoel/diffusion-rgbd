@@ -1,0 +1,42 @@
+experiment:
+  name: smoke_dummy
+  output_dir: outputs/smoke_dummy
+  seed: 13
+
+data:
+  format: manifest
+  root: data/dummy_nyuv2
+  train_manifest: data/dummy_nyuv2/train.csv
+  val_manifest: data/dummy_nyuv2/val.csv
+  image_size: [96, 128]
+  num_classes: 6
+  ignore_index: 255
+  rgb_mean: [0.485, 0.456, 0.406]
+  rgb_std: [0.229, 0.224, 0.225]
+
+model:
+  name: simple_unet
+  modality: rgbd
+  base_channels: 16
+
+training:
+  epochs: 1
+  batch_size: 2
+  num_workers: 0
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  amp: false
+
+evaluation:
+  batch_size: 2
+  num_workers: 0
+  conditions:
+    - clean_rgbd
+    - rgb_only
+    - depth_only
+    - rgb_corrupt
+    - depth_corrupt
+    - both_corrupt
+  severity: 1
+  rgb_corruption: mixed
+  depth_corruption: mixed
