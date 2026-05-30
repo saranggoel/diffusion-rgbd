@@ -78,6 +78,16 @@ python scripts/summarize_results.py \
   --out outputs/milestone3_results.csv
 ```
 
+## Visualize Training Logs
+
+The training script prints one JSON object per epoch. If you save those logs to a text file, visualize one or more runs with:
+
+```bash
+python scripts/visualize_results.py results/rgb_baseline.txt results/depth_baseline.txt --out-dir results/plots
+```
+
+The visualizer also accepts `outputs/*/history.json`, robustness `eval_matrix.json`, and summary CSV files.
+
 ## Current Scope
 
 This scaffold implements the must-have baselines and evaluation harness. Transformer fusion, diffusion ablations, and the full consistency model should be added once the basic table is producing stable numbers.
