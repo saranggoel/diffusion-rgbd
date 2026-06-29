@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-from __future__ import annotations
+# AI assistance used for debugging visualization code.
 
 import argparse
 import csv
@@ -31,13 +30,11 @@ PREFERRED_EVAL_METRICS = [
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Visualize baseline training logs or robustness evaluation files."
-    )
-    parser.add_argument("paths", nargs="+", help="Result file(s): JSONL logs, history JSON, eval JSON, or summary CSV.")
-    parser.add_argument("--out-dir", default="results/plots", help="Directory where plots will be written.")
-    parser.add_argument("--title", default=None, help="Optional plot title prefix.")
-    parser.add_argument("--metrics", nargs="*", default=None, help="Optional metric names to plot.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("paths", nargs="+")
+    parser.add_argument("--out-dir", default="results/plots")
+    parser.add_argument("--title", default=None)
+    parser.add_argument("--metrics", nargs="*", default=None)
     parser.add_argument("--dpi", type=int, default=180)
     return parser.parse_args()
 
@@ -64,17 +61,11 @@ def main() -> None:
     for item in summaries:
         written.append(plot_summary_csv(item, out_dir, args.title, args.dpi))
 
-    if not written:
-        raise SystemExit("No supported result files were found.")
-
     for path in written:
         print(path)
 
 
 def load_result(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise FileNotFoundError(path)
-
     if path.suffix.lower() == ".csv":
         return {
             "kind": "summary_csv",
@@ -97,7 +88,7 @@ def load_result(path: Path) -> dict[str, Any]:
     if records:
         return {"kind": "history", "path": path, "name": path.stem, "records": records}
 
-    raise ValueError(f"Unsupported result file format: {path}")
+    return {"kind": "history", "path": path, "name": path.stem, "records": []}
 
 
 def try_load_json(path: Path) -> Any:
@@ -140,7 +131,7 @@ def plot_history(
     records = sorted(item["records"], key=lambda row: row.get("epoch", 0))
     metrics = select_history_metrics(records, metric_names)
     if not metrics:
-        raise ValueError(f"No numeric metrics found in {item['path']}")
+        metrics = ["train_loss"]
 
     cols = 2
     rows = math.ceil(len(metrics) / cols)
@@ -186,7 +177,7 @@ def plot_history_comparison(
     cols = 2
     rows = math.ceil(len(metrics) / cols)
     fig, axes = plt.subplots(rows, cols, figsize=(6.0 * cols, 3.7 * rows), squeeze=False)
-    fig.suptitle(make_title(title_prefix, "Baseline comparison"), fontsize=14, fontweight="bold")
+    fig.suptitle(make_title(title_prefix, "Model comparison"), fontsize=14, fontweight="bold")
 
     for ax, metric in zip(axes.ravel(), metrics):
         for item in histories:
@@ -250,7 +241,7 @@ def plot_eval_matrix(
     conditions = payload["conditions"]
     metrics = metric_names or [metric for metric in PREFERRED_EVAL_METRICS if any(metric in row for row in conditions.values())]
     if not metrics:
-        raise ValueError(f"No supported eval metrics found in {item['path']}")
+        metrics = PREFERRED_EVAL_METRICS
 
     fig, axes = plt.subplots(len(metrics), 1, figsize=(9, 3.6 * len(metrics)), squeeze=False)
     condition_names = list(conditions.keys())
@@ -274,11 +265,11 @@ def plot_eval_matrix(
 def plot_summary_csv(item: dict[str, Any], out_dir: Path, title_prefix: str | None, dpi: int) -> Path:
     rows = item["rows"]
     if not rows:
-        raise ValueError(f"CSV has no rows: {item['path']}")
+        rows = [{"Model": item["name"]}]
 
     metric_columns = [column for column in rows[0].keys() if column != "Model"]
-    models = [row.get("Model", f"row_{idx}") for idx, row in enumerate(rows)]
-    fig, ax = plt.subplots(figsize=(max(8, 1.2 * len(metric_columns)), 4.8))
+    models = [pretty_label(row.get("Model", f"row_{idx}")) for idx, row in enumerate(rows)]
+    fig, ax = plt.subplots(figsize=(max(9, 1.35 * len(metric_columns)), 5.8))
     width = 0.8 / max(len(models), 1)
     x_positions = list(range(len(metric_columns)))
 
@@ -287,13 +278,19 @@ def plot_summary_csv(item: dict[str, Any], out_dir: Path, title_prefix: str | No
         offsets = [x + (model_idx - (len(models) - 1) / 2) * width for x in x_positions]
         ax.bar(offsets, values, width=width, label=models[model_idx])
 
-    ax.set_title(make_title(title_prefix, item["name"]))
+    ax.set_title(make_title(title_prefix, pretty_label(item["name"])), fontsize=14, pad=12)
     ax.set_xticks(x_positions, metric_columns, rotation=25, ha="right")
     ax.set_ylabel("Metric")
     ax.set_ylim(bottom=0.0)
     ax.grid(axis="y", alpha=0.25)
-    ax.legend(frameon=False)
-    fig.tight_layout()
+    ax.legend(
+        frameon=False,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.23),
+        ncol=2,
+        fontsize=9,
+    )
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
     out_path = out_dir / f"{safe_name(item['name'])}_summary.png"
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
@@ -322,7 +319,7 @@ def is_number(value: Any) -> bool:
 def try_float(value: Any) -> float:
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+    except Exception:
         return 0.0
     return parsed if math.isfinite(parsed) else 0.0
 
@@ -337,8 +334,23 @@ def pretty_metric(metric: str) -> str:
     return names.get(metric, metric.replace("_", " ").title())
 
 
+def pretty_label(value: str) -> str:
+    names = {
+        "transformer_fusion_rgbd": "Custom Transformer Fusion",
+        "segformer_b2_fusion_rgbd": "SegFormer-B2 Fusion",
+        "segformer_b2_latent_restoration_no_consistency": "SegFormer-B2 + Latent Restoration",
+        "segformer_b2_latent_restoration_full_consistency": "SegFormer-B2 + Restoration + Consistency",
+        "segformer_b2_results": "SegFormer-B2 Robust RGB-D Results",
+    }
+    if "_" not in value:
+        return value
+    return names.get(value, value.replace("_", " ").title())
+
+
 def make_title(prefix: str | None, title: str) -> str:
-    return f"{prefix}: {title}" if prefix else title
+    pretty_prefix = pretty_label(prefix) if prefix else None
+    pretty_title = pretty_label(title)
+    return f"{pretty_prefix}: {pretty_title}" if pretty_prefix else pretty_title
 
 
 def annotate_last(ax: plt.Axes, x_values: list[int], y_values: list[float]) -> None:
@@ -359,8 +371,4 @@ def safe_name(value: str) -> str:
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+    main()

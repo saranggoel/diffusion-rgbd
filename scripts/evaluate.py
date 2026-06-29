@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-from __future__ import annotations
-
 import argparse
 import json
 import sys
@@ -17,15 +14,15 @@ from diffusion_rgbd.config import ensure_dir, load_config
 from diffusion_rgbd.data import build_dataset
 from diffusion_rgbd.metrics import SegmentationMetrics
 from diffusion_rgbd.models import build_model
-from diffusion_rgbd.pipeline import prepare_inputs
+from diffusion_rgbd.pipeline import forward_for_condition, prepare_inputs
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate a baseline across RGB-D robustness conditions.")
-    parser.add_argument("--config", required=True, help="Path to a YAML config.")
-    parser.add_argument("--checkpoint", required=True, help="Path to a model checkpoint.")
-    parser.add_argument("--out", default=None, help="Output JSON path.")
-    parser.add_argument("--limit-batches", type=int, default=None, help="Debug: evaluate a subset only.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--out", default=None)
+    parser.add_argument("--limit-batches", type=int, default=None)
     return parser.parse_args()
 
 
@@ -35,7 +32,7 @@ def main() -> None:
     device = choose_device()
     model = build_model(cfg).to(device)
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    model.load_state_dict(checkpoint["model"])
+    model.load_state_dict(checkpoint["model"], strict=False)
     loader = build_loader(cfg)
 
     conditions = cfg.get("evaluation", {}).get("conditions", ["clean_rgbd"])
@@ -45,6 +42,9 @@ def main() -> None:
         "checkpoint": str(args.checkpoint),
         "conditions": {},
     }
+    out_path = Path(args.out) if args.out else Path(cfg["experiment"]["output_dir"]) / "eval_matrix.json"
+    ensure_dir(out_path.parent)
+    save_json(results, out_path)
 
     for condition in conditions:
         results["conditions"][condition] = evaluate_condition(
@@ -56,11 +56,7 @@ def main() -> None:
             limit_batches=args.limit_batches,
         )
         print(condition, json.dumps(results["conditions"][condition], sort_keys=True))
-
-    out_path = Path(args.out) if args.out else Path(cfg["experiment"]["output_dir"]) / "eval_matrix.json"
-    ensure_dir(out_path.parent)
-    with out_path.open("w", encoding="utf-8") as handle:
-        json.dump(results, handle, indent=2)
+        save_json(results, out_path)
 
 
 def build_loader(cfg: dict[str, Any]) -> DataLoader:
@@ -96,7 +92,7 @@ def evaluate_condition(
         torch.manual_seed(int(cfg.get("experiment", {}).get("seed", 13)) + batch_idx)
         batch = move_batch(batch, device)
         inputs, labels = prepare_inputs(batch, cfg, condition=condition)
-        logits = model(inputs)
+        logits = forward_for_condition(model, inputs, cfg, condition)
         metrics.update(logits, labels)
 
     computed = metrics.compute()
@@ -117,6 +113,13 @@ def choose_device() -> torch.device:
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
+
+
+def save_json(payload: Any, path: Path) -> None:
+    tmp_path = path.with_name(f"{path.name}.tmp")
+    with tmp_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2)
+    tmp_path.replace(path)
 
 
 if __name__ == "__main__":

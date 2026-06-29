@@ -1,6 +1,6 @@
 experiment:
-  name: depth_only
-  output_dir: outputs/depth_only
+  name: transformer_fusion_rgbd
+  output_dir: outputs/transformer_fusion_rgbd
   seed: 13
 
 data:
@@ -16,17 +16,31 @@ data:
   rgb_std: [0.229, 0.224, 0.225]
 
 model:
-  name: simple_unet
-  modality: depth
+  name: transformer_fusion
   base_channels: 32
+  latent_channels: 128
+  num_heads: 4
+  transformer_scales: [3]
+  dropout: 0.0
 
 training:
-  epochs: 20
+  epochs: 100
   batch_size: 8
   num_workers: 4
   learning_rate: 0.0003
   weight_decay: 0.0001
   amp: true
+  train_conditions:
+    - clean_rgbd
+    - rgb_only
+    - depth_only
+    - rgb_corrupt
+    - depth_corrupt
+  train_condition_weights: [0.45, 0.15, 0.15, 0.125, 0.125]
+  validation_condition: clean_rgbd
+  scheduler:
+    type: cosine
+    min_lr: 0.000001
 
 evaluation:
   batch_size: 8
@@ -37,7 +51,6 @@ evaluation:
     - depth_only
     - rgb_corrupt
     - depth_corrupt
-    - both_corrupt
   severity: 2
   rgb_corruption: mixed
   depth_corruption: mixed

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import copy
 from pathlib import Path
 from typing import Any
@@ -8,7 +6,6 @@ import yaml
 
 
 def load_config(path: str | Path, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Load a YAML config and apply optional nested overrides."""
     path = Path(path)
     with path.open("r", encoding="utf-8") as handle:
         cfg = yaml.safe_load(handle) or {}
@@ -40,4 +37,3 @@ def get_nested(cfg: dict[str, Any], dotted_key: str, default: Any = None) -> Any
             return default
         value = value[part]
     return value
-

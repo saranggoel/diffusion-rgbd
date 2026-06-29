@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-from __future__ import annotations
-
 import argparse
 import urllib.request
 from pathlib import Path
@@ -13,7 +10,7 @@ FILES = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Download small NYUv2 split and class-mapping metadata files.")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", default="data/nyuv2_meta")
     return parser.parse_args()
 
@@ -33,4 +30,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

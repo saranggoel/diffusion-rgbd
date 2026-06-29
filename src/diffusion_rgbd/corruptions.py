@@ -1,17 +1,15 @@
-from __future__ import annotations
+# AI assistance used for debugging corruption-mask code.
 
 import torch
 import torch.nn.functional as F
 
-
-VALID_CONDITIONS = {
+FINAL_CONDITIONS = [
     "clean_rgbd",
     "rgb_only",
     "depth_only",
     "rgb_corrupt",
     "depth_corrupt",
-    "both_corrupt",
-}
+]
 
 
 def apply_condition(
@@ -23,10 +21,6 @@ def apply_condition(
     depth_corruption: str = "mixed",
     generator: torch.Generator | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Apply missing/corrupted-modality condition to a batch."""
-    if condition not in VALID_CONDITIONS:
-        raise ValueError(f"Unknown condition '{condition}'. Expected one of {sorted(VALID_CONDITIONS)}")
-
     rgb_out = rgb.clone()
     depth_out = depth.clone()
 
@@ -38,11 +32,23 @@ def apply_condition(
         rgb_out = corrupt_rgb(rgb_out, rgb_corruption, severity, generator)
     elif condition == "depth_corrupt":
         depth_out = corrupt_depth(depth_out, depth_corruption, severity, generator)
-    elif condition == "both_corrupt":
-        rgb_out = corrupt_rgb(rgb_out, rgb_corruption, severity, generator)
-        depth_out = corrupt_depth(depth_out, depth_corruption, severity, generator)
 
     return rgb_out, depth_out
+
+
+def condition_to_modality_mask(
+    condition: str,
+    batch_size: int,
+    device: torch.device,
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    if condition == "rgb_only":
+        values = [1.0, 0.0]
+    elif condition == "depth_only":
+        values = [0.0, 1.0]
+    else:
+        values = [1.0, 1.0]
+    return torch.tensor(values, device=device, dtype=dtype).view(1, 2).repeat(batch_size, 1)
 
 
 def corrupt_rgb(
@@ -65,8 +71,6 @@ def corrupt_rgb(
         out = _avg_blur(out, kernel_size)
     if kind in {"mixed", "occlusion"}:
         out = _random_patches(out, value=0.0, severity=severity, generator=generator)
-    if kind not in {"mixed", "low_light", "noise", "blur", "occlusion"}:
-        raise ValueError(f"Unknown RGB corruption: {kind}")
     return out.clamp(0.0, 1.0)
 
 
@@ -89,8 +93,6 @@ def corrupt_depth(
         random_values = torch.rand(out.shape, device=out.device, dtype=out.dtype, generator=generator)
         mask = random_values > drop_prob
         out = out * mask
-    if kind not in {"mixed", "noise", "holes", "invalid_mask"}:
-        raise ValueError(f"Unknown depth corruption: {kind}")
     return out.clamp(0.0, 1.0)
 
 

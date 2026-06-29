@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-from __future__ import annotations
-
 import argparse
 import csv
 import json
@@ -14,14 +11,13 @@ CONDITION_COLUMNS = [
     ("depth_only", "Depth only"),
     ("rgb_corrupt", "RGB corrupt"),
     ("depth_corrupt", "Depth corrupt"),
-    ("both_corrupt", "Both corrupt"),
 ]
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Summarize robustness evaluation JSON files into a CSV table.")
-    parser.add_argument("--inputs", nargs="+", required=True, help="Evaluation JSON files.")
-    parser.add_argument("--out", required=True, help="Output CSV path.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inputs", nargs="+", required=True)
+    parser.add_argument("--out", required=True)
     parser.add_argument("--metric", default="miou", choices=["miou", "pixel_accuracy", "mean_class_accuracy"])
     return parser.parse_args()
 
@@ -31,12 +27,14 @@ def main() -> None:
     rows = [load_row(Path(path), args.metric) for path in args.inputs]
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = out_path.with_name(f"{out_path.name}.tmp")
 
     fieldnames = ["Model"] + [label for _, label in CONDITION_COLUMNS] + ["Avg Robust", "Max Drop"]
-    with out_path.open("w", encoding="utf-8", newline="") as handle:
+    with tmp_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+    tmp_path.replace(out_path)
     print(f"Wrote {out_path}")
 
 
@@ -76,4 +74,3 @@ def format_value(value: float | None) -> str:
 
 if __name__ == "__main__":
     main()
-

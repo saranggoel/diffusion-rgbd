@@ -1,0 +1,68 @@
+experiment:
+  name: segformer_b2_fusion_rgbd
+  output_dir: outputs/segformer_b2_fusion_rgbd
+  seed: 13
+
+data:
+  format: nyuv2_mat
+  mat_path: nyu_depth_v2_labeled.mat
+  splits_path: data/nyuv2_meta/splits.mat
+  class_mapping_path: data/nyuv2_meta/classMapping40.mat
+  label_mode: nyu40
+  image_size: [240, 320]
+  num_classes: 40
+  ignore_index: 255
+  rgb_mean: [0.485, 0.456, 0.406]
+  rgb_std: [0.229, 0.224, 0.225]
+
+model:
+  name: segformer_fusion
+  backbone_name: nvidia/mit-b2
+  pretrained: true
+  latent_channels: 256
+  dropout: 0.05
+  depth_mean: [0.5, 0.5, 0.5]
+  depth_std: [0.5, 0.5, 0.5]
+
+training:
+  epochs: 100
+  batch_size: 4
+  num_workers: 4
+  learning_rate: 0.00006
+  weight_decay: 0.01
+  amp: true
+  train_conditions:
+    - clean_rgbd
+    - rgb_only
+    - depth_only
+    - rgb_corrupt
+    - depth_corrupt
+  train_condition_weights: [0.45, 0.15, 0.15, 0.125, 0.125]
+  validation_conditions:
+    - clean_rgbd
+    - rgb_only
+    - depth_only
+    - rgb_corrupt
+    - depth_corrupt
+  robust_validation_conditions:
+    - rgb_only
+    - depth_only
+    - rgb_corrupt
+    - depth_corrupt
+  checkpoint_metric: avg_robust_miou
+  scheduler:
+    type: cosine
+    min_lr: 0.000001
+
+evaluation:
+  batch_size: 4
+  num_workers: 4
+  conditions:
+    - clean_rgbd
+    - rgb_only
+    - depth_only
+    - rgb_corrupt
+    - depth_corrupt
+  severity: 2
+  rgb_corruption: mixed
+  depth_corruption: mixed

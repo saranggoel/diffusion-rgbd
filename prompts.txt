@@ -1,0 +1,27 @@
+help us brainstorm project ideas/what is currently existing aroud robust RGB-D semantic segmentation under missing or corrupted sensors
+
+explain related work on modality dropout, masked representaion learning, and teacher-student distilaltion for RGB-D segmentation
+
+summarize how methods like MaskMentor use complete-modality teachers to supervise missing-modality students
+
+help debug NYUv2 RGB/depth/label resizing for semantic segmentation [inserted associated code]
+
+how would reasonable RGB corruptions and depth corruptions look realistically to simulate sensor degradation?
+
+debug PyTorch code for applying low-light, blur, noise, etc. masks (make sure that attached code is implemented correctly accoriding to corruption type) [inserted associated code]
+
+write Matplotlib code to plot validation mIoU, robust mIoU, max robust drop, and training loss
+
+fix plot labels and readable formatting for final report figures.
+
+debug LaTeX table formatting and captions layout errors
+
+debug Modal volume setup for uploading and reading the NYUv2 .mat dataset during remote training
+
+interpret training logs from Modal 
+
+generate qualitative segmentation grids showing RGB/depth/ground truth NYUv2 examples
+
+why does SegFormer-B2 checkpoint trained on Modal does not load
+
+All prompts were similar in style/scope as the ones listed above. 

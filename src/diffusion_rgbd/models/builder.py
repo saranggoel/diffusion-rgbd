@@ -1,31 +1,53 @@
-from __future__ import annotations
-
 from typing import Any
 
 import torch.nn as nn
 
-from diffusion_rgbd.models.simple_unet import SimpleUNet
-
-
-MODALITY_CHANNELS = {
-    "rgb": 3,
-    "depth": 1,
-    "rgbd": 4,
-}
+from diffusion_rgbd.models.fusion_segmenter import TransformerFusionSegmenter
+from diffusion_rgbd.models.restoration_segmenter import LatentRestorationSegmenter
+from diffusion_rgbd.models.segformer_fusion import SegFormerFusionSegmenter
 
 
 def build_model(cfg: dict[str, Any]) -> nn.Module:
     model_cfg = cfg.get("model", {})
     data_cfg = cfg.get("data", {})
-    name = model_cfg.get("name", "simple_unet")
-    modality = model_cfg.get("modality", "rgbd")
-    if modality not in MODALITY_CHANNELS:
-        raise ValueError(f"Unknown modality '{modality}'. Expected one of {sorted(MODALITY_CHANNELS)}")
-    if name != "simple_unet":
-        raise ValueError(f"Unknown model '{name}'. Only simple_unet is implemented in the scaffold.")
-    return SimpleUNet(
-        in_channels=MODALITY_CHANNELS[modality],
-        num_classes=int(data_cfg["num_classes"]),
-        base_channels=int(model_cfg.get("base_channels", 32)),
-    )
+    name = model_cfg.get("name", "segformer_fusion")
 
+    if name == "transformer_fusion":
+        return TransformerFusionSegmenter(
+            num_classes=int(data_cfg["num_classes"]),
+            base_channels=int(model_cfg.get("base_channels", 32)),
+            latent_channels=int(model_cfg.get("latent_channels", 128)),
+            num_heads=int(model_cfg.get("num_heads", 4)),
+            transformer_scales=tuple(model_cfg.get("transformer_scales", [3])),
+            dropout=float(model_cfg.get("dropout", 0.0)),
+        )
+
+    if name == "segformer_fusion":
+        return build_segformer_fusion_model(cfg)
+
+    if name == "segformer_latent_restoration":
+        fusion_model = build_segformer_fusion_model(cfg)
+        return LatentRestorationSegmenter(
+            num_classes=int(data_cfg["num_classes"]),
+            latent_channels=int(model_cfg.get("latent_channels", 256)),
+            fusion_model=fusion_model,
+        )
+
+    return build_segformer_fusion_model(cfg)
+
+
+def build_segformer_fusion_model(cfg: dict[str, Any]) -> SegFormerFusionSegmenter:
+    model_cfg = cfg.get("model", {})
+    data_cfg = cfg.get("data", {})
+    return SegFormerFusionSegmenter(
+        num_classes=int(data_cfg["num_classes"]),
+        backbone_name=str(model_cfg.get("backbone_name", "nvidia/mit-b2")),
+        pretrained=bool(model_cfg.get("pretrained", True)),
+        latent_channels=int(model_cfg.get("latent_channels", 256)),
+        dropout=float(model_cfg.get("dropout", 0.0)),
+        depth_mean=model_cfg.get("depth_mean", [0.5, 0.5, 0.5]),
+        depth_std=model_cfg.get("depth_std", [0.5, 0.5, 0.5]),
+        freeze_backbone=bool(model_cfg.get("freeze_backbone", False)),
+        gradient_checkpointing=bool(model_cfg.get("gradient_checkpointing", False)),
+        segformer_config=model_cfg.get("segformer_config"),
+    )

@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-from __future__ import annotations
+# AI assistance used for debugging visualization code.
 
 import argparse
 import sys
@@ -15,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from diffusion_rgbd.config import ensure_dir, load_config
 from diffusion_rgbd.data import build_dataset
 from diffusion_rgbd.models import build_model
-from diffusion_rgbd.pipeline import prepare_inputs
+from diffusion_rgbd.pipeline import forward_for_condition, prepare_inputs
 
 
 PALETTE = np.array(
@@ -36,7 +35,7 @@ PALETTE = np.array(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export qualitative RGB-D segmentation prediction grids.")
+    parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--condition", default="clean_rgbd")
@@ -51,7 +50,7 @@ def main() -> None:
     device = choose_device()
     model = build_model(cfg).to(device)
     checkpoint = torch.load(args.checkpoint, map_location=device)
-    model.load_state_dict(checkpoint["model"])
+    model.load_state_dict(checkpoint["model"], strict=False)
     model.eval()
 
     dataset = build_dataset(cfg, split="val")
@@ -63,7 +62,13 @@ def main() -> None:
         torch.manual_seed(int(cfg.get("experiment", {}).get("seed", 13)) + index)
         with torch.no_grad():
             inputs, _labels = prepare_inputs(batch, cfg, condition=args.condition)
-            pred = model(inputs).argmax(dim=1)[0].cpu().numpy().astype(np.uint8)
+            pred = (
+                forward_for_condition(model, inputs, cfg, args.condition)
+                .argmax(dim=1)[0]
+                .cpu()
+                .numpy()
+                .astype(np.uint8)
+            )
         grid = make_grid(sample, pred, args.condition)
         sample_id = str(sample["id"]).replace("/", "_")
         grid.save(out_dir / f"{index:03d}_{sample_id}_{args.condition}.png")
